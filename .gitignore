@@ -1,0 +1,10 @@
+
+# python virtual environment
+.venv
+
+# system environment: which contain some ensitive informations
+config/.env
+
+__pycache__
+.pytest_cache
+.vscode
