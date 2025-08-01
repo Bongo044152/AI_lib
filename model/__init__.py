@@ -18,16 +18,39 @@
 
 # since leak understanding on AI, this project will not traning module but using api serverse instead
 
-from .Base_controller import BaseController
-from .GPT_controller import GPTController
-from .DeepSeek_controller import DeepSeekController
-from .Claude_controller import ClaudeController
+from .BaseModel import BaseModel
+from .GPTModel import GPTModel
+# from .DeepSeekModel import DeepSeekModel
+# from .ClaudeModel import ClaudeModel
 
 # usage of __all__:
 #   https://docs.python.org/zh-tw/3.13/tutorial/modules.html#importing-from-a-package
 __all__ = [
-    "BaseController",
-    "GPTController",
-    "DeepSeekController",
-    "ClaudeController",
+    "BaseModel",
+    "GPTModel",
+    # "DeepSeekController",
+    # "ClaudeController",
 ]
+
+
+
+# model/
+# ├── base.py                ← 你自己的 BaseModel
+# ├── types/                 ← 共用型別定義
+# │   ├── __init__.py
+# │   ├── core.py            ← Message, Role, TokenUsage 等
+# │   ├── gpt.py             ← ModelName for GPT
+# │   ├── gemini.py          ← Gemini 專屬型別（如 model name、角色）
+# │   └── deepseek.py        ← DeepSeek 型別
+# ├── gpt/                   ← GPT 模型 schema
+# │   ├── input.py
+# │   ├── output.py
+# │   └── __init__.py
+# ├── gemini/                ← Gemini 模型 schema
+# │   ├── input.py
+# │   ├── output.py
+# │   └── __init__.py
+# ├── deepseek/              ← DeepSeek 模型 schema
+# │   ├── input.py
+# │   ├── output.py
+# │   └── __init__.py

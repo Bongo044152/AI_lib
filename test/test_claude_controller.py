@@ -2,7 +2,7 @@
 # using pytest to test ClaudeController
 
 import pytest
-from model.Claude_controller import ClaudeController, ClaudeOption
+from model.ClaudeModel import ClaudeController, ClaudeOption
 
 
 def test_link():

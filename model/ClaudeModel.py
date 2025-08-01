@@ -32,8 +32,8 @@ import os
 import logging
 from dotenv import load_dotenv
 from .config import env_path
-from .Base_controller import BaseController, BaseOption
-from typing import Optional, List, Dict, Any
+from .BaseModel import BaseController, BaseOption
+from typing import Optional, List, Dict, Any, Union
 
 # Load API key from .env
 load_dotenv(env_path)
@@ -96,7 +96,9 @@ class ClaudeOption(BaseOption):
         self.thinking = thinking
         self.thinking_budget_tokens = thinking_budget_tokens
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(
+        self
+    ) -> Dict[str, Any]:
         """
         Serialize options to API payload.
         """
@@ -119,7 +121,9 @@ class ClaudeOption(BaseOption):
         """
         return ["claude-sonnet-4-20250514", "claude-opus-4-20250514"]
     
-    def __repr__(self) -> str:
+    def __repr__(
+        self
+    ) -> str:
         return (
             f"<ClaudeOption(model={self.model}, temperature={self.temperature}, "
             f"max_tokens={self.max_tokens}, stream={self.stream}, thinking={self.thinking})>"
@@ -147,13 +151,14 @@ class ClaudeController(BaseController):
     ) -> None:
         # Validate and set options
         assert isinstance(opt, (type(None), ClaudeOption)), "opt must be a ClaudeOption or None"
+        assert isinstance()
         self.opt = opt or ClaudeOption()
         # Tuple: (connect_timeout, read_timeout)
         self.timeout = timeout
 
     def chat(
         self, 
-        message: List[Dict[str, Any]],
+        message: Union[List[Dict[str, Any]], str],
         system: Optional[str] = None
     ) -> str:
         """
