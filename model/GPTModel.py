@@ -5,8 +5,7 @@ Model for OpenAI Responses API (gpt-4o, o3, etc.).
 
 This module exposes GPTOption for configuration and GPTModel to send
 requests via the OpenAI Responses API. Supports both streaming and non-streaming
-modes. Use streaming to receive incremental deltas and record the final message
-for history tracking.
+modes. Use streaming to receive incremental deltas, and increase user experience.
 
 See:
     https://platform.openai.com/docs/api-reference/responses
@@ -23,7 +22,7 @@ import pydantic
 from .BaseModel import BaseOption
 
 from .types.ModelLists import Gpt_common_model_types, Gpt_reasoning_model_types
-from .types import ModelIn
+from .types import ModelIn, ModelOut
 
 # using .env file to store api key
 from dotenv import load_dotenv
@@ -40,11 +39,15 @@ client = OpenAI(
     api_key=API_KEY
 )
 
-# 
 class GPTOption(BaseOption):
+    """
+    The option used to config GPT model.
+    """
+    # class attribute
     COMMON_MODELS: ClassVar[tuple[str, ...]] = get_args(Gpt_common_model_types)
     REASONING_MODELS: ClassVar[tuple[str, ...]] = get_args(Gpt_reasoning_model_types)
 
+    # __init__
     model: Union[Gpt_common_model_types, Gpt_reasoning_model_types] = COMMON_MODELS[0]
     temperature: Union[int, float] = 0.8
     max_output_tokens: int = 2048
@@ -85,11 +88,12 @@ class GPTOption(BaseOption):
             f"stream={self.stream})>"
         )
 
-# 
 class GPTModel(BaseModel):
+    # class attribute
     COMMON_MODELS: ClassVar[tuple[str, ...]] = get_args(Gpt_common_model_types)
     REASONING_MODELS: ClassVar[tuple[str, ...]] = get_args(Gpt_reasoning_model_types)
 
+    # __init__
     opt: Optional[GPTOption] = GPTOption()
     timeout: Union[tuple[int, int], int] = (5, 60)
 
@@ -97,45 +101,25 @@ class GPTModel(BaseModel):
     def chat(
         self, 
         message: ModelIn
-    ) -> Dict[str, Any]:
+    ) -> ModelOut:
         """
         Send a chat request to the model and return the assistant's response text.
 
         Args:
-            message (Union[str, List[Dict[str, Any]]]): The input to generate a response from.
-                According to the OpenAI Responses API documentation:
-                https://platform.openai.com/docs/api-reference/responses/create
-
-                This parameter supports multiple formats:
-                
-                - str: A plain text input, treated as a user message by default.
-                - list: A list of structured input items (dicts), each representing part of the model's context.
-
-                Each item in the list may include:
-                    - Input messages with roles such as 'user', 'assistant', 'system', or 'developer'.
-                      Instructions from 'developer' or 'system' roles override those from 'user'.
-                      Messages with the 'assistant' role are typically responses from previous turns.
-                      ( means the output from ai )
-                    - Other content types like images, audio, or tool call outputs, depending on context.
-                      ( auto mode in defult )
+            message (ModelIn): Unified model input object format.
 
         Returns:
-            The recorded message object used for history tracking.
+            ModelOut:
+            The message object with three fields:
+                + model: the model which reply your message.
+                + thinking: the process of model thinking, in text.
+                + output: the model output, text only.
 
             Example:
                 {
-                    "id": "msg_68.....3fa",
-                    "content": [
-                        {
-                            "type": "output_text",
-                            "text": "...",
-                            "annotations": [],
-                            "logprobs": []
-                        }
-                    ],
-                    "role": "assistant",
-                    "status": "completed",
-                    "type": "message"
+                    "model": model_name,
+                    "thinking": "ai thinking, if it did",
+                    "output": "ai output"
                 }
         """
 
@@ -175,7 +159,7 @@ class GPTModel(BaseModel):
                     "summary": "detailed"
                 }
             else:
-                raise ValueError("only o3 can thinking ..")
+                raise ValueError(f"{self.opt.model} is not reasoning model")
         else:
             message.thinking = None
 
@@ -255,10 +239,9 @@ class GPTModel(BaseModel):
     def _prase_stream(
         self,
         response
-    ) -> Dict[str, Any]:
+    ) -> ModelOut:
         """
-        Internal: output the recorded message for history track 
-        and also print the message AI generate in the stream
+        Internal: print the message AI generate in the stream
 
         Reference:
             - https://platform.openai.com/docs/guides/streaming-responses?api-mode=responses
@@ -270,6 +253,7 @@ class GPTModel(BaseModel):
         }
 
         once = True
+        out = False
 
         # https://platform.openai.com/docs/guides/streaming-responses?api-mode=responses
         for event in response:
@@ -280,6 +264,9 @@ class GPTModel(BaseModel):
             t = event["type"]
 
             if t == "response.output_text.delta":
+                if out:
+                    print("\n</thinking>", flush=True)
+                    out = False
                 delta = event.get("delta")
                 print(delta, end="", flush=True)
 
@@ -290,12 +277,12 @@ class GPTModel(BaseModel):
                 if once:
                     print("<thinking>", flush=True)
                     once = False
+                    out = True
                 delta = event.get("delta")
                 print(delta, end="", flush=True)
 
             elif t == "response.reasoning_summary_text.done":
                 result["thinking"] = event["text"]
-                print("\n</thinking>", flush=True)
 
             elif t == "response.completed":
                 break
@@ -308,19 +295,19 @@ class GPTModel(BaseModel):
         print(flush=True)
         return result
 
-        
     def get_option(self) -> GPTOption:
         """
         Get the current GPTOption.
         """
         return self.opt
     
-    def set_option(self, opt: Optional[GPTOption] = None) -> None:
+    @pydantic.validate_call
+    def set_option(self, opt: GPTOption) -> None:
         """
-        Set a new GPTOption. If None, resets to defaults.
+        Set a new GPTOption.
 
         Args:
-            opt (Optional[GPTOption]): new option instance or None
+            opt (Optional[GPTOption]): new option for GPTModel
         """
         self.opt = opt if opt else GPTOption()
         

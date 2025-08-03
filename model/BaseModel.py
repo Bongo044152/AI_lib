@@ -1,5 +1,5 @@
 """
-file: module/Base_controller.py
+file: module/BaseModel.py
 
 Defines an abstract base class for unified AI controller interfaces.
 
@@ -10,18 +10,18 @@ References:
 # using Abstract Base Classes provided by python offical
 from abc import ABC, abstractmethod
 import pydantic
+from . import ModelIn, ModelOut
 from typing import *
 
 class BaseOption(pydantic.BaseModel, ABC):
     """
-    Abstract base class for option configurations passed into BaseController implementations.
+    Abstract base class for option configurations passed into BaseModel implementations.
 
-    This class is intended to provide a unified interface for configuring different AI models
-    (e.g., model name, temperature, max tokens, etc.) in a controller-agnostic way.
+    This class is intended to provide a unified interface for configuring different AI models.
+    (e.g., model name, temperature, max tokens, etc.)
 
     Subclasses must implement:
     - `to_dict`: serialization logic to prepare data for API requests.
-    - `get_model_option`: a static method that returns all supported model identifiers.
     - `__repr__`: a string representation of the configuration object for debugging/logging.
     """
 
@@ -55,7 +55,7 @@ class BaseModel(pydantic.BaseModel, ABC):
     Abstract base class for AI model.
 
     This interface defines the standard protocol for integrating various AI backend services
-    (e.g., OpenAI, Anthropic, Google PaLM). Subclasses must implement concrete logic for
+    (e.g., OpenAI, Anthropic, Claude). Subclasses must implement concrete logic for
     handling chat interactions and provide a descriptive representation of their internal state.
 
     Subclasses must implement:
@@ -69,17 +69,17 @@ class BaseModel(pydantic.BaseModel, ABC):
     @override
     def chat(
         self, 
-        message: dict
-    ) -> str:
+        message: ModelIn
+    ) -> ModelOut:
         """
         Abstract method to handle chat interactions with a specific AI implementation.
 
         Args:
-            message (dict): The input message payload. Usually a list of role-content dicts,
-                            e.g., [{"role": "user", "content": "Hello!"}]
+            message (ModelIn): Unified model input object format.
 
         Returns:
-            str: The AI-generated response text.
+            ModelOut:
+            Unified model output object format.
 
         Note:
             This method must encapsulate all API logic (e.g., formatting, sending, parsing)

@@ -1,4 +1,6 @@
-import pydantic
+from typing import *
 
-class ModelOut(pydantic.BaseModel):
-    text: str
+class ModelOut(TypedDict):
+    model: str
+    thinking: str
+    output: str
