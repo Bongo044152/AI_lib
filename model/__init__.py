@@ -18,16 +18,21 @@
 
 # since leak understanding on AI, this project will not traning module but using api serverse instead
 
-from .Base_controller import BaseController
-from .GPT_controller import GPTController
-from .DeepSeek_controller import DeepSeekController
-from .Claude_controller import ClaudeController
+from .types import ModelIn, ModelOut
+from .BaseModel import BaseModel, BaseOption
+from .GPTModel import GPTModel, GPTOption
+# from .DeepSeekModel import DeepSeekModel
+# from .ClaudeModel import ClaudeModel
 
 # usage of __all__:
 #   https://docs.python.org/zh-tw/3.13/tutorial/modules.html#importing-from-a-package
 __all__ = [
-    "BaseController",
-    "GPTController",
-    "DeepSeekController",
-    "ClaudeController",
+    "ModelIn",
+    "ModelOut",
+    "BaseModel",
+    "BaseOption",
+    "GPTModel",
+    "GPTOption"
+    # "DeepSeekController",
+    # "ClaudeController",
 ]

@@ -48,7 +48,7 @@ from typing import Any, Dict, List, Optional
 import requests
 from dotenv import load_dotenv
 
-from .Base_controller import BaseController
+from .BaseModel import BaseController
 from .config import env_path
 
 # Load API key from .env

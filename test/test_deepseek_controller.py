@@ -2,7 +2,7 @@
 # using pytest to test DeepSeekController
 
 import pytest
-from model.DeepSeek_controller import DeepSeekController, DeepSeekOption
+from model.DeepSeekModel import DeepSeekController, DeepSeekOption
 
 
 def test_link():
