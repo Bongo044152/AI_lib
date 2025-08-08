@@ -1,22 +1,8 @@
 """
-file: model/DeepSeek_controller.py
+file: model/DeepSeekModel.py
 
-Define a class named DeepSeekController used to control NVIDIA DeepSeek AI behavior.
+Model for DeepSeek Responses API
 
-Example:
-    ```python
-    from model.DeepSeek_controller import DeepSeekController, DeepSeekOption
-
-    # Initialize with streaming enabled
-    option = DeepSeekOption(stream=True)
-    controller = DeepSeekController(opt=option)
-    messages = [
-        {"role": "system",    "content": "You are a helpful AI assistant."},
-        {"role": "user",      "content": "Hello, how are you?"}
-    ]
-    response_text = controller.chat(messages)
-    print(response_text)
-    ```
 
 As mentioned, we don’t really know how to train AI. The operating principles rely on simple APIs to interact with AI.
 Using python's `requests` module to post network requests and finally extract the key information.
@@ -30,7 +16,6 @@ To enable SSE, simply include `"stream": True` in the HTTP POST body.
 In common usage, a chat is not a single request, and requests happen repeatedly. To enhance performance, we use `requests.Session`.
 - See requests.Session:
     https://requests.readthedocs.io/en/latest/user/advanced/#session-objects
-
 We also configure timeouts to avoid indefinite waiting: 
     https://requests.readthedocs.io/en/latest/user/advanced/#timeouts
 
@@ -40,48 +25,47 @@ References:
 - NVIDIA DeepSeek API documentation:
     https://docs.api.nvidia.com/nim/reference/deepseek-ai-deepseek-r1-infer
 """
-
+import requests
 import os, json
 import logging
-from typing import Any, Dict, List, Optional
-
+from typing import *
 import requests
 from dotenv import load_dotenv
-
-from .BaseModel import BaseController
+import pydantic
+from .BaseModel import BaseOption
+from .BaseModel import BaseModel,BaseOption
 from .config import env_path
+from .types import ModelIn, ModelOut
 
 # Load API key from .env
 load_dotenv(env_path)
 API_KEY = os.getenv('NVIDIA_DEEPSEEK_API_KEY')
 if not API_KEY:
+    #logging if needed
     raise RuntimeError("NVIDIA_DEEPSEEK_API_KEY is required in environment")
 
 
-class DeepSeekOption:
+class DeepSeekOption(BaseOption):
     """
     Options for DeepSeekController.
     """
 
-    def __init__(
-        self,
-        model: str = "deepseek-ai/deepseek-r1",
-        temperature: float = 0.6,
-        max_tokens: int = 4096,
-        stream: bool = False,
-    ) -> None:
-        if model not in DeepSeekOption.get_model_option():
-            raise ValueError(f"Unsupported model: {model}")
-        if not (0 <= temperature <= 1):
-            raise ValueError("temperature must be between 0 and 1")
-        assert isinstance(stream, bool), "stream must be a bool"
-        assert isinstance(max_tokens, int), "max_tokens must be an int"
+    #__init__
+    model: str = "deepseek-ai/deepseek-r1",
+    temperature: float = 0.6,
+    max_tokens: int = 4096,
+    stream: bool = False
 
-        self.model = model
-        self.temperature = temperature
-        self.max_tokens = max_tokens
-        self.stream = stream
-
+    @pydantic.field_validator("model")
+    def _check_model(model):
+        assert model != "deepseek-ai/deepseek-r1", "model not supported"
+        return model
+    
+    @pydantic.field_validator("temperature")
+    def _check_temperature(temperature):
+        assert 0 <= temperature <= 1, "temperature must be between 0 and 1"
+        return temperature
+    
     def to_dict(self) -> Dict[str, Any]:
         """Serialize options to API payload."""
         return {
@@ -90,63 +74,50 @@ class DeepSeekOption:
             "max_tokens": self.max_tokens,
             "stream": self.stream,
         }
-
-    @staticmethod
-    def get_model_option() -> List[str]:
-        """
-        Returns supported model names.
-        """
-        # see https://docs.api.nvidia.com/nim/reference/deepseek-ai-deepseek-r1-infer
-        return ["deepseek-ai/deepseek-r1"]
-
+    
     def __repr__(self) -> str:
         return (
-            f"<DeepSeekOption(model={self.model}, temperature={self.temperature}, "
-            f"max_tokens={self.max_tokens}, stream={self.stream})> "
+            f"<DeepSeekOption("
+            f"model={self.model}, "
+            f"temperature={self.temperature}, "
+            f"max_output_tokens={self.max_tokens}, "
+            f"stream={self.stream})>"
         )
 
 
-class DeepSeekController(BaseController):
+class DeepSeekModel(BaseModel):
     """
     Controller for NVIDIA DeepSeek AI inference.
     """
-
-    BASE_URL = "https://integrate.api.nvidia.com/v1/chat/completions"
-
-    def __init__(
-        self,
-        timeout: tuple[int, int] = (5, 60),
-        opt: Optional[DeepSeekOption] = None
-    ) -> None:
-        assert isinstance(opt, Optional[DeepSeekOption])
-        self.opt = opt or DeepSeekOption()
-        self.session = requests.Session()
-        self.timeout = timeout
+    model_config = pydantic.ConfigDict(arbitrary_types_allowed=True)
+    BASE_URL:ClassVar[str] = "https://integrate.api.nvidia.com/v1/chat/completions"
+    opt: Optional[DeepSeekOption] = DeepSeekOption()
+    timeout: Union[tuple[int, int], int] = (5, 60)
+    session: requests.Session = requests.Session()
 
     def chat(
         self,
-        message: List[Dict]
-    ) -> str:
+        message: ModelIn
+    ) -> ModelOut:
         """
-        Send a chat request and return the AI's response text.
+        Send a chat request to the model and return the assistant's response text.
 
         Args:
-            message (List[Dict]): An array of conversation messages. Each dict must include:
-                - "role": one of 'system', 'assistant', or 'user'
-                - "content": the message text
+            message (ModelIn): Unified model input object format.
 
-            Roles:
-                * system: system-level instructions
-                * assistant: previous AI responses
-                * user: user inputs (must be the last message)
+        Returns:
+            ModelOut:
+            The message object with three fields:
+                + model: the model which reply your message.
+                + thinking: the process of model thinking, in text.
+                + output: the model output, text only.
 
-        Example:
-            messages = [
-                {"role": "system",    "content": "You are a helpful assistant."},
-                {"role": "user",      "content": "Hi, how are you?"},
-                {"role": "assistant", "content": "I'm doing well—how can I help?"},
-                {"role": "user",      "content": "Tell me a joke."}
-            ]
+            Example:
+                {
+                    "model": model_name,
+                    "thinking": "ai thinking, if it did",
+                    "output": "ai output"
+                }
 
         NOTE: The final message's role must be 'user'.
         
@@ -155,50 +126,51 @@ class DeepSeekController(BaseController):
         Returns:
             str: The AI-generated response content.
         """
-        # Validate message
-        if not isinstance(message, list):
-            raise TypeError("message must be a list of dicts, see NVIDIA API docs")
-        if len(message) == 0:
-            raise RuntimeError("message list must not be empty")
-        if message[-1].get("role") != "user":
-            raise RuntimeError("Last message role must be 'user', see NVIDIA API docs: \n\t\
-                               https://docs.api.nvidia.com/nim/reference/deepseek-ai-deepseek-r1-infer")
-
+        if isinstance(message.content, str):
+            message.content = [{
+                "role": "user",
+                "content": message.content
+            }]
         payload = {
-            **self.opt.to_dict(),
-            "top_p": 0.7,
-            "frequency_penalty": 0,
-            "presence_penalty": 0,
-            "messages": message
+            "model": self.opt.model,
+            "temperature": self.opt.temperature,
+            "max_tokens": self.opt.max_tokens,
+            "stream": self.opt.stream,
+            "messages": message.content
         }
-
-        try:
-            resp = self._post_message(payload)
-            if self.opt.stream:
-                return self._parse_stream(resp)
-            return resp.json()["choices"][0]["message"]["content"]
-
-        except requests.ReadTimeout:
-            # logging here if needed
-            raise
-        except requests.RequestException as e:
-            # logging here if needed
-            raise
-
+        ###post message
+        response = self._post_message(payload)
+        
+        if self.opt.stream:
+            return self._parse_stream(response)
+        else:
+            return_data = response.json()
+            res = {
+                "model": self.opt.model,
+                "thinking": "",
+                "output": ""
+            }
+        
+            for item in return_data["choices"]:
+                res["output"] = item["message"]["content"]
+                
+            return res
+        
+    @pydantic.validate_call
     def _post_message(
         self,
-        payload: Dict[str, Any]
+        payload: Dict[str,Any]
     ) -> requests.Response:
         """
         Internal: Perform HTTP POST with headers, using custom timeouts.
         """
         headers = {
-            "Accept": "text/event-stream" if self.opt.stream else "application/json",
-            "Content-Type": "application/json",
-            "Authorization": f"Bearer {API_KEY}"
+            "accept": "text/event-stream" if self.opt.stream else "application/json",
+            "content-Type": "application/json",
+            "authorization": f"Bearer {API_KEY}"
         }
         resp = self.session.post(
-            DeepSeekController.BASE_URL,
+            DeepSeekModel.BASE_URL,
             headers=headers,
             json=payload,
             timeout=self.timeout,
@@ -207,16 +179,21 @@ class DeepSeekController(BaseController):
 
         # if the URL is invalid or returns a 4xx/5xx status code, it raises an HTTPError.
         # see more: https://www.geeksforgeeks.org/python/response-raise_for_status-python-requests/
+        print(resp.text)
         resp.raise_for_status()
         return resp
-
-    def _parse_stream(self, response: requests.Response) -> str:
+    
+    @pydantic.validate_call
+    def _parse_stream(
+        self, 
+        response
+        ) -> ModelOut:
         """
         Parse Server-Sent Events (SSE) from a streaming response.
         """
         out_text: List[str] = []
         for raw_line in response.iter_lines(decode_unicode=True):
-
+            """
             assert isinstance(raw_line, str)
 
             if isinstance(raw_line, (bytes, bytearray)):
@@ -226,7 +203,8 @@ class DeepSeekController(BaseController):
                     # logging here if needed
                     raise # or pass
             else:
-                line = str(raw_line).strip()
+            """
+            line = str(raw_line).strip()
 
 
             if not line:
