@@ -51,9 +51,9 @@ class DeepSeekOption(BaseOption):
     """
 
     #__init__
-    model: str = "deepseek-ai/deepseek-r1",
-    temperature: float = 0.6,
-    max_tokens: int = 4096,
+    model: str = "deepseek-ai/deepseek-r1"
+    temperature: float = 0.6
+    max_tokens: int = 4096
     stream: bool = False
 
     @pydantic.field_validator("model")
@@ -153,7 +153,13 @@ class DeepSeekModel(BaseModel):
         
             for item in return_data["choices"]:
                 res["output"] = item["message"]["content"]
-                
+
+            s = res["output"]
+            START, END = "<think>", "</think>"
+            tail = s.index(END, len(START))
+            res["thinking"] = s[len(START) : tail].strip().strip('\n')
+            res["output"]   = s[tail + len(END) :].strip().strip('\n')
+
             return res
         
     @pydantic.validate_call
@@ -179,7 +185,6 @@ class DeepSeekModel(BaseModel):
 
         # if the URL is invalid or returns a 4xx/5xx status code, it raises an HTTPError.
         # see more: https://www.geeksforgeeks.org/python/response-raise_for_status-python-requests/
-        print(resp.text)
         resp.raise_for_status()
         return resp
     
@@ -191,21 +196,15 @@ class DeepSeekModel(BaseModel):
         """
         Parse Server-Sent Events (SSE) from a streaming response.
         """
-        out_text: List[str] = []
+        res: ModelOut = {
+            "model": self.opt.model,
+            "thinking": "",
+            "output": ""
+        }
+
+        is_think_end = False
         for raw_line in response.iter_lines(decode_unicode=True):
-            """
-            assert isinstance(raw_line, str)
-
-            if isinstance(raw_line, (bytes, bytearray)):
-                try:
-                    line = raw_line.decode('utf-8').strip()
-                except UnicodeDecodeError:
-                    # logging here if needed
-                    raise # or pass
-            else:
-            """
             line = str(raw_line).strip()
-
 
             if not line:
                 continue
@@ -218,13 +217,20 @@ class DeepSeekModel(BaseModel):
                 chunk = json.loads(line[len("data: "):])
                 delta = chunk["choices"][0]["delta"]
                 if content := delta.get("content"):
-                    out_text.append(content)
-                    print(content, end="")
+                    if not is_think_end:
+                        if content == "</think>":
+                            is_think_end = True
+                        elif content != "<think>":
+                            res["thinking"] += content
+                    else:
+                        res["output"] += content
+                    print(content, end="", flush=True)
             except json.JSONDecodeError:
                 # logging here if needed
                 raise # or pass
-
-        return "".join(out_text)
+        
+        res["thinking"] = res["thinking"].strip().strip('\n')
+        return res
     
     def get_option(self) -> DeepSeekOption:
         """

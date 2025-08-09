@@ -1,5 +1,5 @@
 from model.DeepSeekModel import DeepSeekModel,DeepSeekOption,ModelIn
-option = DeepSeekOption(stream=True)
-deepseek = DeepSeekModel(opt=option)
+deepseek = DeepSeekModel(opt=DeepSeekOption(stream=True))
 resp = deepseek.chat(ModelIn(content="Hello"))
+print()
 print(resp)
