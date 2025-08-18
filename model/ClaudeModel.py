@@ -28,12 +28,17 @@ References:
 import anthropic
 from anthropic.types.message import Message
 from anthropic.types.raw_message_stream_event import RawMessageStreamEvent
-import os
-import logging
+
+import logging, os
+from .BaseModel import BaseOption, BaseModel
+from typing import *
+import pydantic
+
 from dotenv import load_dotenv
 from .config import env_path
-from .BaseModel import BaseController, BaseOption
-from typing import Optional, List, Dict, Any, Union
+
+from .types.ModelLists import Claude_model_types
+from .types import ModelIn, ModelOut
 
 # Load API key from .env
 load_dotenv(env_path)
@@ -47,54 +52,36 @@ client = anthropic.Anthropic(api_key=API_KEY)
 
 class ClaudeOption(BaseOption):
     """
-    Options for ClaudeController, defining model parameters and streaming behavior.
-
-    Attributes:
-        model (str): Claude model identifier.
-        temperature (float): Sampling temperature between 0 and 1.
-        max_tokens (int): Maximum tokens allowed in the response.
-        stream (bool): Whether to enable streaming via SSE.
-        thinking (bool): Whether to use Claude’s internal “thinking” mode.
-        thinking_budget_tokens (int): Token budget for “thinking” if enabled.
+    The option used to config Claude model.
     """
 
-    def __init__(
-        self,
-        model: str = "claude-sonnet-4-20250514",
-        temperature: float = 0.6,
-        max_tokens: int = 4096,
-        stream: bool = False,
-        thinking: bool = False,
-        thinking_budget_tokens: int = 0
-    ):
-        # Validate model selection
-        if model not in ClaudeOption.get_model_option():
-            raise ValueError(f"Unsupported model: {model}")
-        # Validate temperature range
-        if not (0 <= temperature <= 1):
-            raise ValueError("temperature must be between 0 and 1")
-        # Validate types
-        assert isinstance(stream, bool), "stream must be a bool"
-        assert isinstance(max_tokens, int), "max_tokens must be an int"
-        # Ensure minimum token limits
-        if max_tokens < 1024:
-            raise ValueError("max_tokens too small; must be at least 1024")
-        assert isinstance(thinking, bool), "thinking must be a bool"
-        if thinking:
-            # When thinking mode is on, enforce token budget constraints
-            assert thinking_budget_tokens >= 1024, (
-                "when thinking mode is enabled, thinking_budget_tokens must be ≥ 1024"
-            )
-            assert thinking_budget_tokens < max_tokens, (
-                f"thinking_budget_tokens ({thinking_budget_tokens}) must be < max_tokens ({max_tokens})"
-            )
+    # class attribute
+    REASONING_MODELS: ClassVar[tuple[str, ...]] = get_args(Claude_model_types)
 
-        self.model = model
-        self.temperature = temperature
-        self.max_tokens = max_tokens
-        self.stream = stream
-        self.thinking = thinking
-        self.thinking_budget_tokens = thinking_budget_tokens
+    model: Claude_model_types = REASONING_MODELS[0]
+    temperature: float = 0.6
+    max_tokens: int = 3072
+    stream: bool = False
+
+    @pydantic.field_validator("model")
+    @classmethod
+    def _check_model(cls, model):
+        model_list = []
+        for i in cls.REASONING_MODELS:
+            model_list.append(i)
+        
+        assert model in model_list, "model not supported"
+        return model
+
+    @pydantic.field_validator("temperature")
+    def _check_temperature(temperature):
+        assert 0 <= temperature <= 1, "temperature must be between 0 and 1"
+        return temperature
+    
+    @pydantic.field_validator("max_tokens")
+    def _check_max_tokens(max_tokens):
+        assert max_tokens >= 1024, "max_tokens too small; must be at least 1024"
+        return max_tokens
 
     def to_dict(
         self
@@ -106,61 +93,33 @@ class ClaudeOption(BaseOption):
             "model": self.model,
             "temperature": self.temperature,
             "max_tokens": self.max_tokens,
-            "stream": self.stream,
-            "thinking": "enabled" if self.thinking else "disabled"
+            "stream": self.stream
         }
-        # Include thinking budget only if thinking mode is enabled
-        if self.thinking:
-            res.update({"thinking_budget_tokens": self.thinking_budget_tokens})
         return res
 
-    @staticmethod
-    def get_model_option() -> List[str]:
-        """
-        Returns supported model names.
-        """
-        return ["claude-sonnet-4-20250514", "claude-opus-4-20250514"]
-    
     def __repr__(
         self
     ) -> str:
         return (
             f"<ClaudeOption(model={self.model}, temperature={self.temperature}, "
-            f"max_tokens={self.max_tokens}, stream={self.stream}, thinking={self.thinking})>"
+            f"max_tokens={self.max_tokens}, stream={self.stream})>"
         )
 
 
-class ClaudeController(BaseController):
-    """
-    Controller for Anthropic Claude AI inference.
+class ClaudeModel(BaseModel):
+    # class attribute
+    REASONING_MODELS: ClassVar[tuple[str, ...]] = get_args(Claude_model_types)
 
-    This class encapsulates the logic to send chat messages to Claude, handle
-    streaming vs. non-streaming responses, and manage request timeouts.
+    # __init__
+    opt: Optional[ClaudeOption] = ClaudeOption()
+    timeout: Union[tuple[int, int], int] = (5, 60)
+    thinking_param: dict | None = None
 
-    Typical usage:
-        opt = ClaudeOption(stream=True)
-        controller = ClaudeController(opt=opt)
-        messages = [{"role": "user", "content": "Hello!"}]
-        response = controller.chat(messages)
-    """
-
-    def __init__(
-        self,
-        timeout: tuple[int, int] = (5, 60),
-        opt: Optional[ClaudeOption] = None
-    ) -> None:
-        # Validate and set options
-        assert isinstance(opt, (type(None), ClaudeOption)), "opt must be a ClaudeOption or None"
-        assert isinstance()
-        self.opt = opt or ClaudeOption()
-        # Tuple: (connect_timeout, read_timeout)
-        self.timeout = timeout
-
+    @pydantic.validate_call
     def chat(
         self, 
-        message: Union[List[Dict[str, Any]], str],
-        system: Optional[str] = None
-    ) -> str:
+        message: ModelIn
+    ) -> ModelOut:
         """
         Send a chat request and return the AI's response text.
 
@@ -179,132 +138,118 @@ class ClaudeController(BaseController):
         Returns:
             str: The generated response text.
         """
-        # Normalize single dict to list
-        if isinstance(message, dict):
-            message = [message]
-        assert isinstance(message, list), "message must be a list of dicts"
+        if isinstance(message.content, str):
+            message.content = [{"role": "user", "content": message.content}]
 
-        # Validate each message entry
-        for d in message:
-            role = d.get("role")
-            content = d.get("content")
+        if not message.system_prompt:
+            message.system_prompt = ""
 
-            if not role:
-                raise ValueError("field 'role' is required on each message")
-            if role not in ["user", "assistant"]:
-                raise ValueError(f"unsupported role: {role}")
-            
-            if content is None:
-                raise ValueError("field 'content' is required on each message")
-            if not isinstance(content, (str, dict)):
-                raise TypeError("content must be a string or a dict")
+        if message.thinking:
+            assert self.opt.max_tokens // 3 >= 1024, (
+                "When thinking is enabled, at least 1024 tokens must be reserved "
+                f"(currently only {self.opt.max_tokens // 3}).\n",
+                "enable thinking only if max_tokens is large enough (≥ 3072, since 1/3 must be ≥ 1024)."
+            )
 
-        # Perform API call
-        response = self._post_message(message, system)
-
-        # Handle streaming vs. non-streaming
-        if self.opt.stream:
-            return self._parse_stream(response)
+        if message.thinking:
+            self.thinking_param = {
+                "budget_tokens": self.opt.max_tokens // 3,
+                "type": "enabled"
+            }
         else:
-            out = ""
-            for block in response.content:
-                if block.type == "thinking":
-                    out += f"Thinking summary: {block.thinking}\n"
-                elif block.type == "text":
-                    out += f"Response: {block.text}"
-            return out
-        
+            self.thinking_param = {
+                "type": "disabled"
+            }
+
+        if self.opt.stream:
+            return self._post_stream(message)
+        else:
+            return self._post_message(message)
+
+    @pydantic.validate_call
     def _post_message(
         self,
-        message: List[Dict[str, Any]],
-        system: Optional[str]
-    ):
+        message: ModelIn
+    ) -> ModelOut:
         """
         Internal: send request to Claude messages.create endpoint.
         """
+
         try:
             # system parameter passed as keyword
-            if self.opt.thinking:
-                res = client.messages.create(
-                    model=self.opt.model,
-                    max_tokens=self.opt.max_tokens,
-                    temperature=1,  # always set to 1 if thinking mod is on
-                    system=system or "",
-                    messages=message,
-                    stream=self.opt.stream,
-                    thinking={
-                        "type": "enabled",
-                        "budget_tokens": self.opt.thinking_budget_tokens
-                    },
-                )
-            else:
-                res = client.messages.create(
-                    model=self.opt.model,
-                    max_tokens=self.opt.max_tokens,
-                    temperature=self.opt.temperature,
-                    system=system or "",
-                    messages=message,
-                    stream=self.opt.stream,
-                )
+            response = client.messages.create(
+                model=self.opt.model,
+                max_tokens=self.opt.max_tokens,
+                temperature=1 if message.thinking else self.opt.temperature,  # always set to 1 if thinking mod is on
+                system=message.system_prompt,
+                messages=message.content,
+                stream=False,
+                thinking=self.thinking_param
+            )
+
+            response_dict: dict = response.to_dict()
 
             # Check for API-level error
-            if isinstance(res, Message):
-                if res.to_dict().get("type") == "error":
+            if isinstance(response, Message):
+                if response_dict.get("type") == "error":
                     # logging here if needed
                     raise RuntimeError("Error occurred in Claude API response")
 
-            return res
+            result_output: ModelOut = {
+                "model": self.opt.model,
+                "output": "",
+                "thinking": ""
+            }
+
+            for item in response_dict["content"]:
+                if item["type"] == "thinking":
+                    result_output["thinking"] += item["thinking"]
+                elif item["type"] == "text":
+                    result_output["output"] += item["text"]
+            return result_output
         except Exception as e:
             # logging here if needed
             raise
 
-    def _parse_stream(
+    def _post_stream(
         self,
-        stream
-    ) -> str:
+        message: ModelIn
+    ) -> ModelOut:
         """
         Internal: parse streaming response from Claude.
-
-        Only handles:
-        - thinking deltas  → print under “Thinking:”
-        - content deltas   → print under “Text:”
-
-        References:
-        - https://docs.anthropic.com/en/docs/build-with-claude/streaming
-        - https://github.com/anthropics/anthropic-sdk-python/blob/main/examples/messages_stream.py
-        - https://github.com/anthropics/anthropic-sdk-python/blob/main/helpers.md
-        - https://github.com/anthropics/anthropic-sdk-python/blob/main/examples/thinking_stream.py
-        - https://github.com/anthropics/anthropic-sdk-python/blob/main/src/anthropic/types/raw_message_stream_event.py
         """
-        out_text = ""
-        thinking_started = False
-        text_started = False
+        result_output: ModelOut = {
+            "model": self.opt.model,
+            "output": "",
+            "thinking": ""
+        }
 
-        # https://github.com/anthropics/anthropic-sdk-python/blob/main/src/anthropic/types/raw_message_stream_event.py
-        for event in stream:
-            if event.type == "content_block_delta":
-                delta = event.delta
-                # 有 thinking 情況
-                if getattr(delta, "thinking", None) is not None:
-                    if not thinking_started:
-                        print("\nThinking:\n---------")
-                        thinking_started = True
-                    # 假設 delta.thinking 裡面是片段字串
-                    print(delta.thinking, end="", flush=True)
+        with client.messages.stream(
+            model=self.opt.model,
+            max_tokens=self.opt.max_tokens,
+            temperature=1 if message.thinking else self.opt.temperature,  # always set to 1 if thinking mod is on
+            system=message.system_prompt,
+            messages=message.content,
+            thinking=self.thinking_param
+        ) as stream:
+            thinking_started = False
 
-                # 有文字情況
-                if getattr(delta, "text", None):
-                    if not text_started:
-                        print("\n\nText:\n-----")
-                        text_started = True
-                    print(delta.text, end="", flush=True)
-                    out_text += delta.text
-            elif event.type == "message_stop":
-                break
-            else:
-                continue
+            for event in stream:
+                if event.type == "content_block_delta":
+                    if event.delta.type == "thinking_delta":
+                        if not thinking_started:
+                            print("<thinking>", flush=True)
+                            thinking_started = True
+                        print(event.delta.thinking, end="", flush=True)
+                        result_output["thinking"] += event.delta.thinking
+                    elif event.delta.type == "text_delta":
+                        if thinking_started:
+                            print("\n</thinking>", flush=True)
+                            thinking_started = False
+                        print(event.delta.text, end="", flush=True)
+                        result_output["output"] += event.delta.text
 
-        return out_text
+        return result_output
 
     def get_option(self) -> ClaudeOption:
         """
@@ -317,9 +262,11 @@ class ClaudeController(BaseController):
         Set a new ClaudeOption. If None, resets to defaults.
 
         Args:
-            opt (Optional[ClaudeOption]): new option instance or None
+            opt (Optional[ClaudeOption]): new option for ClaudeOption
         """
+        if opt:
+            assert isinstance(opt, ClaudeOption)
         self.opt = opt if opt else ClaudeOption()
 
     def __repr__(self) -> str:
-        return f"<ClaudeController(model={self.opt.model}, timeout={self.timeout})>"
+        return f"<ClaudeModel(model={self.opt.model}, timeout={self.timeout})>"

@@ -22,7 +22,7 @@ from .types import ModelIn, ModelOut
 from .BaseModel import BaseModel, BaseOption
 from .GPTModel import GPTModel, GPTOption
 # from .DeepSeekModel import DeepSeekModel
-# from .ClaudeModel import ClaudeModel
+from .ClaudeModel import ClaudeModel, ClaudeOption
 
 # usage of __all__:
 #   https://docs.python.org/zh-tw/3.13/tutorial/modules.html#importing-from-a-package
@@ -34,5 +34,6 @@ __all__ = [
     "GPTModel",
     "GPTOption"
     # "DeepSeekController",
-    # "ClaudeController",
+    "ClaudeModel",
+    "ClaudeOption"
 ]
