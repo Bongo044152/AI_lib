@@ -1,23 +1,32 @@
 """
 file: model/DeepSeekModel.py
 
-Model for DeepSeek Responses API
+Define classes for interacting with NVIDIA DeepSeek R1 API.
 
+Example:
+    ```python
+    from model.DeepSeekModel import DeepSeekModel, DeepSeekOption
+    from model.types import ModelIn
 
-As mentioned, we don’t really know how to train AI. The operating principles rely on simple APIs to interact with AI.
-Using python's `requests` module to post network requests and finally extract the key information.
+    # Initialize with streaming enabled
+    option = DeepSeekOption(stream=True, temperature=0.7)
+    controller = DeepSeekModel()
+    controller.set_option(option)
 
-We use Server-Sent Events (SSE) to avoid unknown waiting, just like chat-gpt does in their web applications.
-- See more about SSE:
-    https://blackbing.medium.com/%E6%B7%BA%E8%AB%87-server-sent-events-9c81ef21ca8e5eb654
+    # Send message
+    message = ModelIn(content="Tell me a joke about AI.")
+    response = controller.chat(message)
 
-To enable SSE, simply include `"stream": True` in the HTTP POST body.
+    print(response["thinking"])  # model reasoning
+    print(response["output"])    # final reply
+    ```
 
-In common usage, a chat is not a single request, and requests happen repeatedly. To enhance performance, we use `requests.Session`.
-- See requests.Session:
-    https://requests.readthedocs.io/en/latest/user/advanced/#session-objects
-We also configure timeouts to avoid indefinite waiting: 
-    https://requests.readthedocs.io/en/latest/user/advanced/#timeouts
+Implementation details:
+- Provides DeepSeekOption for configuration (model, temperature, tokens, streaming).
+- DeepSeekModel handles request building, sending, and response parsing.
+- Supports both standard and streaming (SSE) responses.
+- Extracts <think> ... </think> reasoning separately from user-facing output.
+- Uses requests.Session with timeouts for efficient repeated calls.
 
 NOTE: NVIDIA's free-tier API cannot handle extremely heavy usage.
 
@@ -47,7 +56,7 @@ if not API_KEY:
 
 class DeepSeekOption(BaseOption):
     """
-    Options for DeepSeekController.
+    Options used to config DeepSeekController.
     """
 
     #__init__
@@ -87,7 +96,7 @@ class DeepSeekOption(BaseOption):
 
 class DeepSeekModel(BaseModel):
     """
-    Controller for NVIDIA DeepSeek AI inference.
+    Model for NVIDIA DeepSeek AI inference.
     """
     model_config = pydantic.ConfigDict(arbitrary_types_allowed=True)
     BASE_URL:ClassVar[str] = "https://integrate.api.nvidia.com/v1/chat/completions"
@@ -103,7 +112,8 @@ class DeepSeekModel(BaseModel):
         Send a chat request to the model and return the assistant's response text.
 
         Args:
-            message (ModelIn): Unified model input object format.
+            message (ModelIn): Input messages. Can be:
+                - str (user message)
 
         Returns:
             ModelOut:
@@ -114,9 +124,9 @@ class DeepSeekModel(BaseModel):
 
             Example:
                 {
-                    "model": model_name,
-                    "thinking": "ai thinking, if it did",
-                    "output": "ai output"
+                    "model": deepseek-ai/deepseek-r1,
+                    "thinking": "AI internal reasoning...",
+                    "output": "Final assistant reply"
                 }
 
         NOTE: The final message's role must be 'user'.
@@ -126,11 +136,16 @@ class DeepSeekModel(BaseModel):
         Returns:
             str: The AI-generated response content.
         """
+  
         if isinstance(message.content, str):
             message.content = [{
                 "role": "user",
                 "content": message.content
             }]
+        """
+        From API documents, the contents of the message only support STRING and NULL.
+        """ 
+        
         payload = {
             "model": self.opt.model,
             "temperature": self.opt.temperature,
@@ -138,7 +153,6 @@ class DeepSeekModel(BaseModel):
             "stream": self.opt.stream,
             "messages": message.content
         }
-        ###post message
         response = self._post_message(payload)
         
         if self.opt.stream:
