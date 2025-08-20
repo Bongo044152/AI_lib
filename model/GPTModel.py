@@ -7,6 +7,9 @@ This module exposes GPTOption for configuration and GPTModel to send
 requests via the OpenAI Responses API. Supports both streaming and non-streaming
 modes. Use streaming to receive incremental deltas, and increase user experience.
 
+Example:
+    see example/gpt
+
 See:
     https://platform.openai.com/docs/api-reference/responses
 """
@@ -16,10 +19,9 @@ from openai import OpenAI, APITimeoutError, BadRequestError
 from openai.types.responses import Response as openai_Response
 
 import logging, os
-from .BaseModel import BaseModel
+from .BaseModel import BaseModel, BaseOption
 from typing import *
 import pydantic
-from .BaseModel import BaseOption
 
 from .types.ModelLists import Gpt_common_model_types, Gpt_reasoning_model_types
 from .types import ModelIn, ModelOut
@@ -185,7 +187,7 @@ class GPTModel(BaseModel):
             return self._prase_stream(response)
         else:
             return_data = response.to_dict()
-            res = {
+            res: ModelOut = {
                 "model": self.opt.model,
                 "thinking": "",
                 "output": ""
@@ -304,13 +306,16 @@ class GPTModel(BaseModel):
     @pydantic.validate_call
     def set_option(self, opt: GPTOption) -> None:
         """
-        Set a new GPTOption.
+        Set a new GPTOption. If None, resets to defaults.
 
         Args:
             opt (Optional[GPTOption]): new option for GPTModel
         """
-        self.opt = opt if opt else GPTOption()
+        if opt:
+            assert isinstance(opt, GPTOption)
         
+        self.opt = opt if opt else GPTOption()
+
     def __repr__(self) -> str:
         return f"<GPTModel(model={self.opt.model}, timeout={self.timeout})>"
 
