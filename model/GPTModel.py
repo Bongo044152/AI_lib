@@ -7,6 +7,9 @@ This module exposes GPTOption for configuration and GPTModel to send
 requests via the OpenAI Responses API. Supports both streaming and non-streaming
 modes. Use streaming to receive incremental deltas, and increase user experience.
 
+Example:
+    see example/gpt
+
 See:
     https://platform.openai.com/docs/api-reference/responses
 """

@@ -1,23 +1,12 @@
 """
-file: model/Claude_controller.py
+file: model/ClaudeModel.py
 
 Defines a controller for Anthropic Claude AI inference, providing a unified interface
 for sending chat messages, handling streaming or non-streaming responses, and managing
 controller options.
 
 Example:
-    ```python
-    from model.Claude_controller import ClaudeController, ClaudeOption
-
-    # Initialize with streaming enabled
-    option = ClaudeOption(stream=True)
-    controller = ClaudeController(opt=option)
-    messages = [
-        {"role": "user",      "content": "Hello, how are you?"},
-    ]
-    response_text = controller.chat(messages)
-    print(response_text)
-    ```
+    see example/claude
 
 References:
 - Anthropic Claude API (Messages API): https://docs.anthropic.com/en/api/messages
@@ -124,19 +113,25 @@ class ClaudeModel(BaseModel):
         Send a chat request and return the AI's response text.
 
         Args:
-            message (List[Dict[str, Any]]): List of messages, each dict must include:
-                - "role": either 'user' or 'assistant'
-                - "content": the message text
-                (see https://docs.anthropic.com/en/api/messages)
-            system (Optional[str]): Optional system prompt override.
+            message (ModelIn): Unified model input object format.
 
         Notes:
           - Claude’s Messages API does not support a dedicated 'system' role.
-          - If the last message role is 'assistant', the model continues from that content.
           - Streaming is enabled if self.opt.stream is True.
-
+        
         Returns:
-            str: The generated response text.
+            ModelOut:
+            The message object with three fields:
+                + model: the model which reply your message.
+                + thinking: the process of model thinking, in text.
+                + output: the model output, text only.
+
+            Example:
+                {
+                    "model": model_name,
+                    "thinking": "ai thinking, if it did",
+                    "output": "ai output"
+                }
         """
         if isinstance(message.content, str):
             message.content = [{"role": "user", "content": message.content}]
@@ -216,7 +211,7 @@ class ClaudeModel(BaseModel):
         message: ModelIn
     ) -> ModelOut:
         """
-        Internal: parse streaming response from Claude.
+        Internal: send request to Claude messages.stream endpoint.
         """
         result_output: ModelOut = {
             "model": self.opt.model,
@@ -264,8 +259,7 @@ class ClaudeModel(BaseModel):
         Args:
             opt (Optional[ClaudeOption]): new option for ClaudeOption
         """
-        if opt:
-            assert isinstance(opt, ClaudeOption)
+        assert not opt or isinstance(opt, ClaudeOption)
         self.opt = opt if opt else ClaudeOption()
 
     def __repr__(self) -> str:
