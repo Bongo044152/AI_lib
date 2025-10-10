@@ -7,12 +7,12 @@
 
 # Available controllers:
 # - Base_controller.py: Defines an abstract base class for unifying controller interfaces.
-# - GPT_controller.py:      Controller implementation for GPT models, including: 
+# - GPT_controller.py:      Controller implementation for GPT models, including:
 #       + gpt-4o: https://platform.openai.com/docs/models/gpt-4o
 #       + o3: https://platform.openai.com/docs/models/o3
-# - DeepSeek_controller.py: Controller implementation for DeepSeek models, including: 
+# - DeepSeek_controller.py: Controller implementation for DeepSeek models, including:
 #       + deepseek-r1: https://docs.api.nvidia.com/nim/reference/deepseek-ai-deepseek-r1
-# - Claude_controller.py:   Controller implementation for Claude models, including: 
+# - Claude_controller.py:   Controller implementation for Claude models, including:
 #       + Claude Opus 4: https://www.anthropic.com/claude/opus
 #       + Claude Sonnet 4: https://www.anthropic.com/claude/sonnet
 
@@ -21,6 +21,7 @@
 from .types import ModelIn, ModelOut
 from .BaseModel import BaseModel, BaseOption
 from .GPTModel import GPTModel, GPTOption
+
 # from .DeepSeekModel import DeepSeekModel
 from .ClaudeModel import ClaudeModel, ClaudeOption
 
@@ -35,5 +36,5 @@ __all__ = [
     "GPTOption"
     # "DeepSeekController",
     "ClaudeModel",
-    "ClaudeOption"
+    "ClaudeOption",
 ]
