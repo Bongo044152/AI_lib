@@ -31,14 +31,6 @@ from .types import ModelIn, ModelOut
 
 # Load API key from .env
 load_dotenv(env_path)
-API_KEY = os.getenv('ANTHROPIC_API_KEY')
-if not API_KEY:
-    raise RuntimeError("ANTHROPIC_API_KEY is required in environment")
-
-# Initialize global client for Anthropic API
-client = anthropic.Anthropic(api_key=API_KEY)
-
-
 class ClaudeOption(BaseOption):
     """
     The option used to config Claude model.
@@ -103,6 +95,19 @@ class ClaudeModel(BaseModel):
     opt: Optional[ClaudeOption] = ClaudeOption()
     timeout: Union[tuple[int, int], int] = (5, 60)
     thinking_param: dict | None = None
+    
+    """
+    Using after validators,run after the whole model has been validated.
+    https://docs.pydantic.dev/latest/concepts/validators/#model-validators
+    """
+    @pydantic.model_validator(mode='after')
+    def _check_API_KEY(self):
+        API_KEY = os.getenv('ANTHROPIC_API_KEY')
+        if not API_KEY:
+            raise RuntimeError("ANTHROPIC_API_KEY is required in environment")
+        # Initialize global client for Anthropic API
+        self.client = anthropic.Anthropic(api_key=API_KEY)
+        return self
 
     @pydantic.validate_call
     def chat(
@@ -172,7 +177,7 @@ class ClaudeModel(BaseModel):
 
         try:
             # system parameter passed as keyword
-            response = client.messages.create(
+            response = self.client.messages.create(
                 model=self.opt.model,
                 max_tokens=self.opt.max_tokens,
                 temperature=1 if message.thinking else self.opt.temperature,  # always set to 1 if thinking mod is on
@@ -218,8 +223,7 @@ class ClaudeModel(BaseModel):
             "output": "",
             "thinking": ""
         }
-
-        with client.messages.stream(
+        with self.client.messages.stream(
             model=self.opt.model,
             max_tokens=self.opt.max_tokens,
             temperature=1 if message.thinking else self.opt.temperature,  # always set to 1 if thinking mod is on

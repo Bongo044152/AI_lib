@@ -31,15 +31,6 @@ from dotenv import load_dotenv
 from .config import env_path
 load_dotenv(env_path)
 
-API_KEY = os.environ.get("OPENAI_API_KEY")
-
-if not API_KEY:
-    # logging if needed
-    raise RuntimeError("OPENAI_API_KEY is required in environment")
-
-client = OpenAI(
-    api_key=API_KEY
-)
 
 class GPTOption(BaseOption):
     """
@@ -98,7 +89,20 @@ class GPTModel(BaseModel):
     # __init__
     opt: Optional[GPTOption] = GPTOption()
     timeout: Union[tuple[int, int], int] = (5, 60)
-
+    
+    """
+    Using after validators,run after the whole model has been validated.
+    https://docs.pydantic.dev/latest/concepts/validators/#model-validators
+    """
+    @pydantic.model_validator(mode='after')
+    def _check_API_KEY_(self):
+        API_KEY = os.environ.get("OPENAI_API_KEY")
+        if not API_KEY:
+        # logging if needed
+            raise RuntimeError("OPENAI_API_KEY is required in environment")
+        self.client = OpenAI(api_key=API_KEY)
+        return self
+        
     @pydantic.validate_call
     def chat(
         self, 
@@ -213,7 +217,7 @@ class GPTModel(BaseModel):
         the argument message is provided from `chat` function
         """
         try:
-            response: openai_Response = client.with_options(timeout=self.timeout).responses.create(
+            response: openai_Response = self.client.with_options(timeout=self.timeout).responses.create(
                 model=self.opt.model,
                 input=message.content,
                 temperature=self.opt.temperature,
