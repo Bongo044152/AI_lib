@@ -21,6 +21,7 @@
 from .types import ModelIn, ModelOut
 from .BaseModel import BaseModel, BaseOption
 from .GPTModel import GPTModel, GPTOption
+from .HuggingFaceModel import HuggingFaceModel, HuggingFaceOption
 
 # from .DeepSeekModel import DeepSeekModel
 from .ClaudeModel import ClaudeModel, ClaudeOption
@@ -37,4 +38,6 @@ __all__ = [
     # "DeepSeekController",
     "ClaudeModel",
     "ClaudeOption",
+    "HuggingFaceModel",
+    "HuggingFaceOption"
 ]
