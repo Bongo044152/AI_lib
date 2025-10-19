@@ -1,17 +1,19 @@
 """
-file: module/GPTModel.py
+file: module/HuggingFaceModel.py
 
-Model for OpenAI Responses API (gpt-4o, o3, etc.).
+Hugging Face text generation model wrapper (e.g., BLOOM, LLaMA, Mistral).
 
-This module exposes GPTOption for configuration and GPTModel to send
-requests via the OpenAI Responses API. Supports both streaming and non-streaming
-modes. Use streaming to receive incremental deltas, and increase user experience.
+This module provides `HuggingFaceModel` for unified text generation through
+the Transformers pipeline, and `HuggingFaceOption` for configuration.
 
-Example:
-    see example/gpt
+Features:
+    - Supports quantized loading (4-bit) for reduced memory usage.
+    - Compatible with models under "text-generation" and "text2text-generation".
+    - Automatically handles chat templates (system / user / assistant).
+    - Easy integration with `ModelIn` / `ModelOut` structures.
 
 See:
-    https://platform.openai.com/docs/api-reference/responses
+    https://huggingface.co/docs/transformers/main/en/conversations
 """
 
 # https://huggingface.co/docs/transformers/en/main_classes/pipelines#transformers.pipeline
@@ -53,14 +55,15 @@ if not API_KEY:
 ## https://huggingface.co/docs/huggingface_hub/v1.0.0.rc5/en/package_reference/authentication#huggingface_hub.login
 ## https://stackoverflow.max-everyday.com/2025/03/colab-hugging-face-api-token/
 ## https://huggingface.co/docs/transformers.js/en/guides/private
-from huggingface_hub import login # HF auth; https://huggingface.co/docs/huggingface_hub/en/quick-start
+from huggingface_hub import (
+    login,
+)  # HF auth; https://huggingface.co/docs/huggingface_hub/en/quick-start
 
 login(token=API_KEY)  # HF_TOKEN
 
 
-
-
 # -- Options ------------------------------------------------------------------
+
 
 class HuggingFaceOption(BaseOption):
     """
@@ -75,7 +78,7 @@ class HuggingFaceOption(BaseOption):
 
     # __init__
     temperature: Union[int, float] = 0.8
-    max_output_tokens: int = 2048
+    max_output_tokens: int = 512
     stream: bool = False  # 功能尚未開放
     generation_config: Dict[str, Any] = {}
 
@@ -106,6 +109,7 @@ class HuggingFaceOption(BaseOption):
 
 
 # -- Model --------------------------------------------------------------------
+
 
 class HuggingFaceModel(BaseModel):
     """
@@ -166,10 +170,11 @@ class HuggingFaceModel(BaseModel):
             return
 
         # 設定量化參數，減少記憶體使用 / Set quantization settings for smaller memory usage
+        # https://huggingface.co/docs/transformers/en/conversations#performance-and-memory-usage
         bnb_config = BitsAndBytesConfig(
-            load_in_4bit=True,                  # 使用 4-bit 權重 / Use 4-bit weights
-            bnb_4bit_use_double_quant=True,     # 啟用雙重量化 / Enable double quantization
-            bnb_4bit_quant_type="nf4",          # 使用 nf4 量化類型 / Quantization type
+            load_in_4bit=True,  # 使用 4-bit 權重 / Use 4-bit weights
+            bnb_4bit_use_double_quant=True,  # 啟用雙重量化 / Enable double quantization
+            bnb_4bit_quant_type="nf4",  # 使用 nf4 量化類型 / Quantization type
             bnb_4bit_compute_dtype=torch.bfloat16,  # 使用 bfloat16 進行計算 / Use bfloat16 for compute
         )
         # 載入微調好的語言模型（Gemma）/ Load pretrained LLM
@@ -183,6 +188,20 @@ class HuggingFaceModel(BaseModel):
         # 載入對應的 tokenizer / Load tokenizer for the model
         self._tokenizer = AutoTokenizer.from_pretrained(self.model)
 
+        # chat template
+        # see: https://huggingface.co/docs/transformers/en/chat_templating_writing
+        if not getattr(self._tokenizer, "chat_template", None):
+            self._tokenizer.chat_template = """{% for message in messages %}
+{% if message['role'] == 'system' -%}
+System: {{ message['content'] }}
+{% elif message['role'] == 'user' -%}
+User: {{ message['content'] }}
+{% elif message['role'] == 'assistant' -%}
+Assistant: {{ message['content'] }}
+{% endif %}
+{% endfor %}
+Assistant:""".strip()
+
         # --- Try to detect chat template ------------------------------------
         # If tokenizer has a chat template, we can later use:
         #   tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
@@ -192,22 +211,26 @@ class HuggingFaceModel(BaseModel):
             tmpl = getattr(self._tokenizer, "chat_template", None)
             if tmpl:
                 self._has_chat_template = True
-                logging.info("[HF] Chat template detected (first 120 chars): %s",
-                             str(tmpl)[:120].replace("\n", " "))
+                logging.info(
+                    "[HF] Chat template detected (first 120 chars): %s",
+                    str(tmpl)[:120].replace("\n", " "),
+                )
             else:
-                logging.info("[HF] No chat template found on tokenizer; will fallback to naive concat.")
+                logging.info(
+                    "[HF] No chat template found on tokenizer; will fallback to naive concat."
+                )
         except Exception as e:
             logging.warning("[HF] Failed to read chat template: %s", e)
 
         # Base generation kwargs; allow per-call overrides later.
         base_kwargs = {
-            "task": "text-generation",      # 任務為文本生成 / Task type
-            "model": self._llm,             # 使用的模型 / LLM
-            "tokenizer": self._tokenizer,   # tokenizer
-            "max_new_tokens": self.opt.max_output_tokens,   # 回應最大長度 / Maximum new tokens
+            "task": "text-generation",  # 任務為文本生成 / Task type
+            "model": self._llm,  # 使用的模型 / LLM
+            "tokenizer": self._tokenizer,  # tokenizer
+            "max_new_tokens": self.opt.max_output_tokens,  # 回應最大長度 / Maximum new tokens
             # Sampling toggled later inside chat() according to temperature.
-            "do_sample": False,             # 不使用隨機 sampling（使用貪婪解碼）/ Greedy decoding
-            "device_map": "auto",           # accelerate 加速
+            "do_sample": False,  # 不使用隨機 sampling（使用貪婪解碼）/ Greedy decoding
+            "device_map": "auto",  # accelerate 加速
         }
         base_kwargs.update(overrides)
 
@@ -242,6 +265,25 @@ class HuggingFaceModel(BaseModel):
         ```
         """
 
+        temp_generation_config = self.opt.generation_config.copy()
+        temp_generation_config.update(generation_config)
+        generation_config = temp_generation_config
+
+        # 直接輸出
+        if isinstance(message.content, str) and not message.system_prompt:
+            self._create_pipeline_lazy()
+            model_out = self._pipe(message.content, **temp_generation_config)
+            # 可能考慮的安全檢查 ... (略)
+
+            res: ModelOut = {
+                "model": self.model,
+                "output": model_out,
+                "thinking": "",
+            }
+
+            return res
+        
+
         ##################################
         # format to the correct field
         ##################################
@@ -250,7 +292,7 @@ class HuggingFaceModel(BaseModel):
             message.content = [
                 {
                     "role": "user",
-                    "content": {"text": message.content},
+                    "content": message.content,
                 }
             ]
 
@@ -259,14 +301,9 @@ class HuggingFaceModel(BaseModel):
                 0,
                 {
                     "role": "system",
-                    "content": [{"type": "input_text", "text": message.system_prompt}],
+                    "content": message.system_prompt,
                 },
             )
-
-        temp_generation_config = self.opt.generation_config.copy()
-        temp_generation_config.update(generation_config)
-        generation_config = temp_generation_config
-
 
         # 別忘了更新 temperature
         if self.opt.temperature > 0:
@@ -279,7 +316,7 @@ class HuggingFaceModel(BaseModel):
 
         self._create_pipeline_lazy()
 
-        model_out = self._pipe(message.content, **temp_generation_config)[-1]["generated_text"][-1]["content"]
+        model_out = self._pipe(message.content, **temp_generation_config)
         # 可能考慮的安全檢查 ... (略)
 
         res: ModelOut = {
@@ -299,7 +336,7 @@ class HuggingFaceModel(BaseModel):
         """
         Set new options. Pass None to reset to defaults.
         Note: changing options after pipeline creation will not recreate the
-        pipeline automatically. If you need a hard reset, ues function `rebuild_pipeline` 
+        pipeline automatically. If you need a hard reset, ues function `rebuild_pipeline`
         insteaded.
         """
         if opt is not None:
@@ -332,6 +369,31 @@ class HuggingFaceModel(BaseModel):
     #     from huggingface_hub import scan_cache_dir
     #     cache_info = scan_cache_dir()
     #     cache_info.delete_revisions(cache_info.revisions)
+
+    def set_chat_template(self, template: str) -> None:
+        """
+        Sets a new chat template for the tokenizer.
+
+        Note:
+            This will override the tokenizer’s existing default template.
+
+        see: https://huggingface.co/docs/transformers/en/chat_templating_writing
+        """
+        self._tokenizer.chat_template = template
+
+    def get_chat_template(self) -> str:
+        """
+        Returns the current chat template of the tokenizer.
+
+        Note:
+            Returns None if no template is set.
+        """
+        return getattr(self._tokenizer, "chat_template", None)
+
+    def test_chat_template(self, context: str) -> str:
+        if not self._tokenizer:
+            self._create_pipeline_lazy()
+        return self._tokenizer.apply_chat_template(context, tokenize=False);
 
     def __repr__(self) -> str:
         return f"<HuggingFaceModel(model={self.model})>"
