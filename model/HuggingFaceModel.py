@@ -282,7 +282,6 @@ Assistant:""".strip()
             }
 
             return res
-        
 
         ##################################
         # format to the correct field
@@ -393,7 +392,7 @@ Assistant:""".strip()
     def test_chat_template(self, context: str) -> str:
         if not self._tokenizer:
             self._create_pipeline_lazy()
-        return self._tokenizer.apply_chat_template(context, tokenize=False);
+        return self._tokenizer.apply_chat_template(context, tokenize=False)
 
     def __repr__(self) -> str:
         return f"<HuggingFaceModel(model={self.model})>"

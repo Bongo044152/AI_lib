@@ -1,18 +1,18 @@
 # file: module/__init__.py
-# This package contains various AI controllers that define unified interfaces
+# This package contains various AI Model that define unified interfaces
 # for interacting with different AI models.
 
-# A "controller" is represented as a class that exposes a standard interface,
+# A "Model" is represented as a class that exposes a standard interface,
 # allowing users to interact with different AI services in a consistent way.
 
-# Available controllers:
-# - Base_controller.py: Defines an abstract base class for unifying controller interfaces.
-# - GPT_controller.py:      Controller implementation for GPT models, including:
+# Available Models:
+# - Base_Model.py: Defines an abstract base class for unifying Model interfaces.
+# - GPT_Model.py:      Model implementation for GPT models, including:
 #       + gpt-4o: https://platform.openai.com/docs/models/gpt-4o
 #       + o3: https://platform.openai.com/docs/models/o3
-# - DeepSeek_controller.py: Controller implementation for DeepSeek models, including:
+# - DeepSeek_Model.py: Model implementation for DeepSeek models, including:
 #       + deepseek-r1: https://docs.api.nvidia.com/nim/reference/deepseek-ai-deepseek-r1
-# - Claude_controller.py:   Controller implementation for Claude models, including:
+# - Claude_Model.py:   Model implementation for Claude models, including:
 #       + Claude Opus 4: https://www.anthropic.com/claude/opus
 #       + Claude Sonnet 4: https://www.anthropic.com/claude/sonnet
 
@@ -39,5 +39,5 @@ __all__ = [
     "ClaudeModel",
     "ClaudeOption",
     "HuggingFaceModel",
-    "HuggingFaceOption"
+    "HuggingFaceOption",
 ]
