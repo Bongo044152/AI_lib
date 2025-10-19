@@ -31,7 +31,7 @@ from .types import ModelIn, ModelOut
 
 # Load API key from .env
 load_dotenv(env_path)
-API_KEY = os.getenv('ANTHROPIC_API_KEY')
+API_KEY = os.getenv("ANTHROPIC_API_KEY")
 if not API_KEY:
     raise RuntimeError("ANTHROPIC_API_KEY is required in environment")
 
@@ -58,7 +58,7 @@ class ClaudeOption(BaseOption):
         model_list = []
         for i in cls.REASONING_MODELS:
             model_list.append(i)
-        
+
         assert model in model_list, "model not supported"
         return model
 
@@ -66,15 +66,13 @@ class ClaudeOption(BaseOption):
     def _check_temperature(temperature):
         assert 0 <= temperature <= 1, "temperature must be between 0 and 1"
         return temperature
-    
+
     @pydantic.field_validator("max_tokens")
     def _check_max_tokens(max_tokens):
         assert max_tokens >= 1024, "max_tokens too small; must be at least 1024"
         return max_tokens
 
-    def to_dict(
-        self
-    ) -> Dict[str, Any]:
+    def to_dict(self) -> Dict[str, Any]:
         """
         Serialize options to API payload.
         """
@@ -82,13 +80,11 @@ class ClaudeOption(BaseOption):
             "model": self.model,
             "temperature": self.temperature,
             "max_tokens": self.max_tokens,
-            "stream": self.stream
+            "stream": self.stream,
         }
         return res
 
-    def __repr__(
-        self
-    ) -> str:
+    def __repr__(self) -> str:
         return (
             f"<ClaudeOption(model={self.model}, temperature={self.temperature}, "
             f"max_tokens={self.max_tokens}, stream={self.stream})>"
@@ -105,10 +101,7 @@ class ClaudeModel(BaseModel):
     thinking_param: dict | None = None
 
     @pydantic.validate_call
-    def chat(
-        self, 
-        message: ModelIn
-    ) -> ModelOut:
+    def chat(self, message: ModelIn) -> ModelOut:
         """
         Send a chat request and return the AI's response text.
 
@@ -118,7 +111,7 @@ class ClaudeModel(BaseModel):
         Notes:
           - Claude’s Messages API does not support a dedicated 'system' role.
           - Streaming is enabled if self.opt.stream is True.
-        
+
         Returns:
             ModelOut:
             The message object with three fields:
@@ -143,18 +136,16 @@ class ClaudeModel(BaseModel):
             assert self.opt.max_tokens // 3 >= 1024, (
                 "When thinking is enabled, at least 1024 tokens must be reserved "
                 f"(currently only {self.opt.max_tokens // 3}).\n",
-                "enable thinking only if max_tokens is large enough (≥ 3072, since 1/3 must be ≥ 1024)."
+                "enable thinking only if max_tokens is large enough (≥ 3072, since 1/3 must be ≥ 1024).",
             )
 
         if message.thinking:
             self.thinking_param = {
                 "budget_tokens": self.opt.max_tokens // 3,
-                "type": "enabled"
+                "type": "enabled",
             }
         else:
-            self.thinking_param = {
-                "type": "disabled"
-            }
+            self.thinking_param = {"type": "disabled"}
 
         if self.opt.stream:
             return self._post_stream(message)
@@ -162,10 +153,7 @@ class ClaudeModel(BaseModel):
             return self._post_message(message)
 
     @pydantic.validate_call
-    def _post_message(
-        self,
-        message: ModelIn
-    ) -> ModelOut:
+    def _post_message(self, message: ModelIn) -> ModelOut:
         """
         Internal: send request to Claude messages.create endpoint.
         """
@@ -175,11 +163,13 @@ class ClaudeModel(BaseModel):
             response = client.messages.create(
                 model=self.opt.model,
                 max_tokens=self.opt.max_tokens,
-                temperature=1 if message.thinking else self.opt.temperature,  # always set to 1 if thinking mod is on
+                temperature=(
+                    1 if message.thinking else self.opt.temperature
+                ),  # always set to 1 if thinking mod is on
                 system=message.system_prompt,
                 messages=message.content,
                 stream=False,
-                thinking=self.thinking_param
+                thinking=self.thinking_param,
             )
 
             response_dict: dict = response.to_dict()
@@ -193,7 +183,7 @@ class ClaudeModel(BaseModel):
             result_output: ModelOut = {
                 "model": self.opt.model,
                 "output": "",
-                "thinking": ""
+                "thinking": "",
             }
 
             for item in response_dict["content"]:
@@ -206,26 +196,25 @@ class ClaudeModel(BaseModel):
             # logging here if needed
             raise
 
-    def _post_stream(
-        self,
-        message: ModelIn
-    ) -> ModelOut:
+    def _post_stream(self, message: ModelIn) -> ModelOut:
         """
         Internal: send request to Claude messages.stream endpoint.
         """
         result_output: ModelOut = {
             "model": self.opt.model,
             "output": "",
-            "thinking": ""
+            "thinking": "",
         }
 
         with client.messages.stream(
             model=self.opt.model,
             max_tokens=self.opt.max_tokens,
-            temperature=1 if message.thinking else self.opt.temperature,  # always set to 1 if thinking mod is on
+            temperature=(
+                1 if message.thinking else self.opt.temperature
+            ),  # always set to 1 if thinking mod is on
             system=message.system_prompt,
             messages=message.content,
-            thinking=self.thinking_param
+            thinking=self.thinking_param,
         ) as stream:
             thinking_started = False
 
@@ -251,7 +240,7 @@ class ClaudeModel(BaseModel):
         Get the current ClaudeOption.
         """
         return self.opt
-    
+
     def set_option(self, opt: Optional[ClaudeOption] = None) -> None:
         """
         Set a new ClaudeOption. If None, resets to defaults.

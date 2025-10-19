@@ -1,6 +1,7 @@
 import pydantic
 from typing import *
-    
+
+
 class ModelIn(pydantic.BaseModel):
     content: Union[str, List[Dict[str, str]]]
     system_prompt: Optional[str] = None

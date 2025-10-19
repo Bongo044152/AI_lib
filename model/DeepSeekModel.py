@@ -31,7 +31,7 @@ In common usage, a chat is not a single request, and requests happen repeatedly.
 - See requests.Session:
     https://requests.readthedocs.io/en/latest/user/advanced/#session-objects
 
-We also configure timeouts to avoid indefinite waiting: 
+We also configure timeouts to avoid indefinite waiting:
     https://requests.readthedocs.io/en/latest/user/advanced/#timeouts
 
 NOTE: NVIDIA's free-tier API cannot handle extremely heavy usage.
@@ -53,7 +53,7 @@ from .config import env_path
 
 # Load API key from .env
 load_dotenv(env_path)
-API_KEY = os.getenv('NVIDIA_DEEPSEEK_API_KEY')
+API_KEY = os.getenv("NVIDIA_DEEPSEEK_API_KEY")
 if not API_KEY:
     raise RuntimeError("NVIDIA_DEEPSEEK_API_KEY is required in environment")
 
@@ -114,19 +114,14 @@ class DeepSeekController(BaseController):
     BASE_URL = "https://integrate.api.nvidia.com/v1/chat/completions"
 
     def __init__(
-        self,
-        timeout: tuple[int, int] = (5, 60),
-        opt: Optional[DeepSeekOption] = None
+        self, timeout: tuple[int, int] = (5, 60), opt: Optional[DeepSeekOption] = None
     ) -> None:
         assert isinstance(opt, Optional[DeepSeekOption])
         self.opt = opt or DeepSeekOption()
         self.session = requests.Session()
         self.timeout = timeout
 
-    def chat(
-        self,
-        message: List[Dict]
-    ) -> str:
+    def chat(self, message: List[Dict]) -> str:
         """
         Send a chat request and return the AI's response text.
 
@@ -149,7 +144,7 @@ class DeepSeekController(BaseController):
             ]
 
         NOTE: The final message's role must be 'user'.
-        
+
         learn more: https://docs.api.nvidia.com/nim/reference/deepseek-ai-deepseek-r1-infer
 
         Returns:
@@ -161,15 +156,17 @@ class DeepSeekController(BaseController):
         if len(message) == 0:
             raise RuntimeError("message list must not be empty")
         if message[-1].get("role") != "user":
-            raise RuntimeError("Last message role must be 'user', see NVIDIA API docs: \n\t\
-                               https://docs.api.nvidia.com/nim/reference/deepseek-ai-deepseek-r1-infer")
+            raise RuntimeError(
+                "Last message role must be 'user', see NVIDIA API docs: \n\t\
+                               https://docs.api.nvidia.com/nim/reference/deepseek-ai-deepseek-r1-infer"
+            )
 
         payload = {
             **self.opt.to_dict(),
             "top_p": 0.7,
             "frequency_penalty": 0,
             "presence_penalty": 0,
-            "messages": message
+            "messages": message,
         }
 
         try:
@@ -185,24 +182,21 @@ class DeepSeekController(BaseController):
             # logging here if needed
             raise
 
-    def _post_message(
-        self,
-        payload: Dict[str, Any]
-    ) -> requests.Response:
+    def _post_message(self, payload: Dict[str, Any]) -> requests.Response:
         """
         Internal: Perform HTTP POST with headers, using custom timeouts.
         """
         headers = {
             "Accept": "text/event-stream" if self.opt.stream else "application/json",
             "Content-Type": "application/json",
-            "Authorization": f"Bearer {API_KEY}"
+            "Authorization": f"Bearer {API_KEY}",
         }
         resp = self.session.post(
             DeepSeekController.BASE_URL,
             headers=headers,
             json=payload,
             timeout=self.timeout,
-            stream=self.opt.stream
+            stream=self.opt.stream,
         )
 
         # if the URL is invalid or returns a 4xx/5xx status code, it raises an HTTPError.
@@ -221,39 +215,38 @@ class DeepSeekController(BaseController):
 
             if isinstance(raw_line, (bytes, bytearray)):
                 try:
-                    line = raw_line.decode('utf-8').strip()
+                    line = raw_line.decode("utf-8").strip()
                 except UnicodeDecodeError:
                     # logging here if needed
-                    raise # or pass
+                    raise  # or pass
             else:
                 line = str(raw_line).strip()
-
 
             if not line:
                 continue
             elif line == "data: [DONE]":
                 break
             elif not line.startswith("data: "):
-                raise RuntimeError("no prefix: \"data:\"")
+                raise RuntimeError('no prefix: "data:"')
 
             try:
-                chunk = json.loads(line[len("data: "):])
+                chunk = json.loads(line[len("data: ") :])
                 delta = chunk["choices"][0]["delta"]
                 if content := delta.get("content"):
                     out_text.append(content)
                     print(content, end="")
             except json.JSONDecodeError:
                 # logging here if needed
-                raise # or pass
+                raise  # or pass
 
         return "".join(out_text)
-    
+
     def get_option(self) -> DeepSeekOption:
         """
         Get the current DeepSeekOption.
         """
         return self.opt
-    
+
     def set_option(self, opt: Optional[DeepSeekOption] = None) -> None:
         """
         Set a new DeepSeekOption. If None, resets to defaults.
