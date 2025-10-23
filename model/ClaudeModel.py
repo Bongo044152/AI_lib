@@ -29,8 +29,6 @@ from .config import env_path
 from .types.ModelLists import Claude_model_types
 from .types import ModelIn, ModelOut
 
-# Load API key from .env
-load_dotenv(env_path)
 class ClaudeOption(BaseOption):
     """
     The option used to config Claude model.
@@ -95,19 +93,20 @@ class ClaudeModel(BaseModel):
     opt: Optional[ClaudeOption] = ClaudeOption()
     timeout: Union[tuple[int, int], int] = (5, 60)
     thinking_param: dict | None = None
-    
+    client: Optional[anthropic.Anthropic] = None
     """
     Using after validators,run after the whole model has been validated.
     https://docs.pydantic.dev/latest/concepts/validators/#model-validators
     """
-    @pydantic.model_validator(mode='after')
-    def _check_API_KEY(self):
+    def _init_client(self):
+        if self.client:
+            return
+        load_dotenv(env_path)
         API_KEY = os.getenv('ANTHROPIC_API_KEY')
         if not API_KEY:
             raise RuntimeError("ANTHROPIC_API_KEY is required in environment")
         # Initialize global client for Anthropic API
         self.client = anthropic.Anthropic(api_key=API_KEY)
-        return self
 
     @pydantic.validate_call
     def chat(
@@ -138,6 +137,9 @@ class ClaudeModel(BaseModel):
                     "output": "ai output"
                 }
         """
+        if not self.client:
+            self._init_client()
+
         if isinstance(message.content, str):
             message.content = [{"role": "user", "content": message.content}]
 
