@@ -13,7 +13,10 @@ def test_link():
 
     # Minimal valid message list
     messages = [
-        {"role": "user", "content": "環境檢查：請回傳一段測試文字:\"Hello DeepSeek\" (回傳的每個字都要完全相同,作為行為測試的準則之一；禁止添加任何其他訊息)"},
+        {
+            "role": "user",
+            "content": '環境檢查：請回傳一段測試文字:"Hello DeepSeek" (回傳的每個字都要完全相同,作為行為測試的準則之一；禁止添加任何其他訊息)',
+        },
     ]
     res = ds.chat(messages)
 
@@ -23,6 +26,7 @@ def test_link():
 
     print(res)
 
+
 def test_stream():
     print()
     # Streaming mode
@@ -30,7 +34,10 @@ def test_stream():
     ds = DeepSeekController(opt=option)
 
     messages = [
-        {"role": "user", "content": "環境檢查：請依序回傳測試文字:\"Hello DeepSeek\"(回傳的每個字都要完全相同,作為行為測試的準則之一；禁止添加任何其他訊息)"},
+        {
+            "role": "user",
+            "content": '環境檢查：請依序回傳測試文字:"Hello DeepSeek"(回傳的每個字都要完全相同,作為行為測試的準則之一；禁止添加任何其他訊息)',
+        },
     ]
     res = ds.chat(messages)
 
@@ -38,6 +45,7 @@ def test_stream():
     assert len(res) > 0
 
     print(res)
+
 
 def test_check_safe1():
     try:
@@ -49,8 +57,9 @@ def test_check_safe1():
     except:
         print("check_safe1 passed !")
         return
-    
+
     assert False
+
 
 def test_check_safe2():
     try:
@@ -60,8 +69,9 @@ def test_check_safe2():
     except:
         print("check_safe2 passed !")
         return
-    
+
     assert False
+
 
 def test_repr():
     print()

@@ -8,6 +8,7 @@ import logging
 
 logger_flag = True
 
+
 # this function is expected to run only once
 def init_logger() -> None:
     """
@@ -25,8 +26,9 @@ def init_logger() -> None:
     logger_flag = True
 
     # base configuretion
-    logging.basicConfig(level=logging.DEBUG,
-                        format='%(asctime)s - %(name)s: [%(levelname)s] - %(message)s',
+    logging.basicConfig(
+        level=logging.DEBUG,
+        format="%(asctime)s - %(name)s: [%(levelname)s] - %(message)s",
     )
 
     console_log = logging.StreamHandler()

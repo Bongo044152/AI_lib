@@ -13,6 +13,7 @@ import pydantic
 from . import ModelIn, ModelOut
 from typing import *
 
+
 class BaseOption(pydantic.BaseModel, ABC):
     """
     Abstract base class for option configurations passed into BaseModel implementations.
@@ -21,27 +22,11 @@ class BaseOption(pydantic.BaseModel, ABC):
     (e.g., model name, temperature, max tokens, etc.)
 
     Subclasses must implement:
-    - `to_dict`: serialization logic to prepare data for API requests.
     - `__repr__`: a string representation of the configuration object for debugging/logging.
     """
 
     @abstractmethod
-    @override
-    def to_dict(
-        self
-    ) -> Dict[str, Any]:
-        """
-        Converts the option configuration into a dictionary format suitable for API payloads.
-
-        Returns:
-            dict: A dictionary containing serialized configuration data.
-        """
-        pass
-    
-    @abstractmethod
-    def __repr__(
-        self
-    ) -> str:
+    def __repr__(self) -> str:
         """
         Returns a human-readable string representation of this option configuration.
 
@@ -67,10 +52,7 @@ class BaseModel(pydantic.BaseModel, ABC):
 
     @abstractmethod
     @override
-    def chat(
-        self, 
-        message: ModelIn
-    ) -> ModelOut:
+    def chat(self, message: ModelIn) -> ModelOut:
         """
         Abstract method to handle chat interactions with a specific AI implementation.
 
@@ -88,19 +70,14 @@ class BaseModel(pydantic.BaseModel, ABC):
         pass
 
     @abstractmethod
-    def get_option(
-        self
-    ) -> BaseOption:
+    def get_option(self) -> BaseOption:
         """
         Get the current Option.
         """
         pass
-    
+
     @abstractmethod
-    def set_option(
-        self, 
-        opt: Optional[BaseOption] = None
-    ) -> None:
+    def set_option(self, opt: Optional[BaseOption] = None) -> None:
         """
         Set a new Option. If None, resets to defaults.
 
@@ -111,9 +88,7 @@ class BaseModel(pydantic.BaseModel, ABC):
 
     @abstractmethod
     @override
-    def __repr__(
-        self
-    ) -> str:
+    def __repr__(self) -> str:
         """
         Returns a human-readable string representation of the model.
 
