@@ -198,4 +198,3 @@ def test_repr():
     print(claude)
     assert isinstance(repr(opt), str)
     print(opt)
-    print(opt.to_dict())

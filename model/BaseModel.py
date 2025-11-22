@@ -22,20 +22,8 @@ class BaseOption(pydantic.BaseModel, ABC):
     (e.g., model name, temperature, max tokens, etc.)
 
     Subclasses must implement:
-    - `to_dict`: serialization logic to prepare data for API requests.
     - `__repr__`: a string representation of the configuration object for debugging/logging.
     """
-
-    @abstractmethod
-    @override
-    def to_dict(self) -> Dict[str, Any]:
-        """
-        Converts the option configuration into a dictionary format suitable for API payloads.
-
-        Returns:
-            dict: A dictionary containing serialized configuration data.
-        """
-        pass
 
     @abstractmethod
     def __repr__(self) -> str:

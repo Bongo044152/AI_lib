@@ -21,6 +21,7 @@ from anthropic.types.raw_message_stream_event import RawMessageStreamEvent
 import logging, os
 from .BaseModel import BaseOption, BaseModel
 from typing import *
+from pydantic import Field
 import pydantic
 
 from dotenv import load_dotenv
@@ -28,15 +29,6 @@ from .config import env_path
 
 from .types.ModelLists import Claude_model_types
 from .types import ModelIn, ModelOut
-
-# Load API key from .env
-load_dotenv(env_path)
-API_KEY = os.getenv("ANTHROPIC_API_KEY")
-if not API_KEY:
-    raise RuntimeError("ANTHROPIC_API_KEY is required in environment")
-
-# Initialize global client for Anthropic API
-client = anthropic.Anthropic(api_key=API_KEY)
 
 
 class ClaudeOption(BaseOption):
@@ -72,18 +64,6 @@ class ClaudeOption(BaseOption):
         assert max_tokens >= 1024, "max_tokens too small; must be at least 1024"
         return max_tokens
 
-    def to_dict(self) -> Dict[str, Any]:
-        """
-        Serialize options to API payload.
-        """
-        res = {
-            "model": self.model,
-            "temperature": self.temperature,
-            "max_tokens": self.max_tokens,
-            "stream": self.stream,
-        }
-        return res
-
     def __repr__(self) -> str:
         return (
             f"<ClaudeOption(model={self.model}, temperature={self.temperature}, "
@@ -94,11 +74,25 @@ class ClaudeOption(BaseOption):
 class ClaudeModel(BaseModel):
     # class attribute
     REASONING_MODELS: ClassVar[tuple[str, ...]] = get_args(Claude_model_types)
+    CLIENT: ClassVar[anthropic.Anthropic] = None
 
     # __init__
-    opt: Optional[ClaudeOption] = ClaudeOption()
+    opt: Optional[ClaudeOption] = Field(default_factory=lambda: ClaudeOption())
     timeout: Union[tuple[int, int], int] = (5, 60)
     thinking_param: dict | None = None
+
+    @pydantic.model_validator(mode="after")
+    @classmethod
+    def _init_client(cls, self) -> Self:
+        if cls.CLIENT:
+            return self
+        load_dotenv(env_path)
+        API_KEY = os.getenv("ANTHROPIC_API_KEY")
+        if not API_KEY:
+            raise RuntimeError("ANTHROPIC_API_KEY is required in environment")
+        # Initialize global client for Anthropic API
+        cls.CLIENT = anthropic.Anthropic(api_key=API_KEY)
+        return self
 
     @pydantic.validate_call
     def chat(self, message: ModelIn) -> ModelOut:
@@ -126,6 +120,7 @@ class ClaudeModel(BaseModel):
                     "output": "ai output"
                 }
         """
+
         if isinstance(message.content, str):
             message.content = [{"role": "user", "content": message.content}]
 
@@ -160,7 +155,7 @@ class ClaudeModel(BaseModel):
 
         try:
             # system parameter passed as keyword
-            response = client.messages.create(
+            response = ClaudeModel.CLIENT.messages.create(
                 model=self.opt.model,
                 max_tokens=self.opt.max_tokens,
                 temperature=(
@@ -205,8 +200,7 @@ class ClaudeModel(BaseModel):
             "output": "",
             "thinking": "",
         }
-
-        with client.messages.stream(
+        with ClaudeModel.CLIENT.messages.stream(
             model=self.opt.model,
             max_tokens=self.opt.max_tokens,
             temperature=(

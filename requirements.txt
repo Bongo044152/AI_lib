@@ -4,6 +4,7 @@ anthropic==0.59.0
 anyio==4.9.0
 asttokens==3.0.0
 bitsandbytes==0.48.1
+black==25.11.0
 certifi==2025.7.14
 charset-normalizer==3.4.2
 comm==0.2.3

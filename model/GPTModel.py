@@ -21,6 +21,7 @@ from openai.types.responses import Response as openai_Response
 import logging, os
 from .BaseModel import BaseModel, BaseOption
 from typing import *
+from pydantic import Field
 import pydantic
 
 from .types.ModelLists import Gpt_common_model_types, Gpt_reasoning_model_types
@@ -29,16 +30,6 @@ from .types import ModelIn, ModelOut
 # using .env file to store api key
 from dotenv import load_dotenv
 from .config import env_path
-
-load_dotenv(env_path)
-
-API_KEY = os.environ.get("OPENAI_API_KEY")
-
-if not API_KEY:
-    # logging if needed
-    raise RuntimeError("OPENAI_API_KEY is required in environment")
-
-client = OpenAI(api_key=API_KEY)
 
 
 class GPTOption(BaseOption):
@@ -51,7 +42,9 @@ class GPTOption(BaseOption):
     REASONING_MODELS: ClassVar[tuple[str, ...]] = get_args(Gpt_reasoning_model_types)
 
     # __init__
-    model: Union[Gpt_common_model_types, Gpt_reasoning_model_types] = COMMON_MODELS[0]
+    model: Union[Gpt_common_model_types, Gpt_reasoning_model_types] = Field(
+        default=COMMON_MODELS[0]
+    )
     temperature: Union[int, float] = 0.8
     max_output_tokens: int = 2048
     stream: bool = False
@@ -73,15 +66,6 @@ class GPTOption(BaseOption):
         assert 0 <= temperature <= 2, "temperature must be between 0 and 2"
         return temperature
 
-    def to_dict(self) -> Dict[str, Any]:
-        """Serialize options to the API payload."""
-        return {
-            "model": self.model,
-            "temperature": self.temperature,
-            "max_output_tokens": self.max_output_tokens,
-            "stream": self.stream,
-        }
-
     def __repr__(self) -> str:
         return (
             f"<GPTOption("
@@ -96,10 +80,24 @@ class GPTModel(BaseModel):
     # class attribute
     COMMON_MODELS: ClassVar[tuple[str, ...]] = get_args(Gpt_common_model_types)
     REASONING_MODELS: ClassVar[tuple[str, ...]] = get_args(Gpt_reasoning_model_types)
+    CLIENT: ClassVar[OpenAI] = None
 
     # __init__
-    opt: Optional[GPTOption] = GPTOption()
+    opt: Optional[GPTOption] = Field(default_factory=lambda: GPTOption())
     timeout: Union[tuple[int, int], int] = (5, 60)
+
+    @pydantic.model_validator(mode="after")
+    @classmethod
+    def _init_client(cls, self) -> Self:
+        if cls.CLIENT:
+            return self
+        load_dotenv(env_path)
+        API_KEY = os.environ.get("OPENAI_API_KEY")
+        if not API_KEY:
+            # logging if needed
+            raise RuntimeError("OPENAI_API_KEY is required in environment")
+        cls.CLIENT = OpenAI(api_key=API_KEY)
+        return self
 
     @pydantic.validate_call
     def chat(self, message: ModelIn) -> ModelOut:
@@ -194,7 +192,7 @@ class GPTModel(BaseModel):
         the argument message is provided from `chat` function
         """
         try:
-            response: openai_Response = client.with_options(
+            response: openai_Response = GPTModel.CLIENT.with_options(
                 timeout=self.timeout
             ).responses.create(
                 model=self.opt.model,

@@ -214,4 +214,3 @@ def test_repr():
 
     assert isinstance(repr(opt), str)
     print(opt)
-    print(opt.to_dict())
