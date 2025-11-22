@@ -62,7 +62,8 @@ class GPTOption(BaseOption):
         return model
 
     @pydantic.field_validator("temperature")
-    def _check_temperature(temperature):
+    @classmethod
+    def _check_temperature(cls, temperature):
         assert 0 <= temperature <= 2, "temperature must be between 0 and 2"
         return temperature
 
