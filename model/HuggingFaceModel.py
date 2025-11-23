@@ -88,15 +88,6 @@ class HuggingFaceOption(BaseOption):
         assert 0 <= temperature <= 1, "temperature must be between 0 and 1"
         return temperature
 
-    def to_dict(self) -> Dict[str, Any]:
-        """Serialize options to a dict (useful for logging/UI)."""
-        return {
-            "temperature": self.temperature,
-            "max_output_tokens": self.max_output_tokens,
-            "stream": self.stream,
-            "generation_config": self.generation_config,
-        }
-
     def __repr__(self) -> str:
         return (
             f"<HuggingFaceOption("
