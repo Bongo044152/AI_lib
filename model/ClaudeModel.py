@@ -55,12 +55,14 @@ class ClaudeOption(BaseOption):
         return model
 
     @pydantic.field_validator("temperature")
-    def _check_temperature(temperature):
+    @classmethod
+    def _check_temperature(cls, temperature):
         assert 0 <= temperature <= 1, "temperature must be between 0 and 1"
         return temperature
 
     @pydantic.field_validator("max_tokens")
-    def _check_max_tokens(max_tokens):
+    @classmethod
+    def _check_max_tokens(cls, max_tokens):
         assert max_tokens >= 1024, "max_tokens too small; must be at least 1024"
         return max_tokens
 
